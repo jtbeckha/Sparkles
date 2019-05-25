@@ -1,0 +1,13 @@
+[package]
+name = "sparkles"
+version = "0.1.0"
+authors = ["Jared <jared@jaredbeckham.com>"]
+edition = "2018"
+
+[dependencies]
+libpulse-binding = "2.6.0"
+libpulse-simple-binding = "2.6.1"
+termion = "1.5.2"
+tui = "0.6.0"
+#dft = "0.5.5"
+#fftw = "0.6.0"
