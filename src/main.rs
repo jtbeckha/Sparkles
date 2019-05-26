@@ -1,47 +1,21 @@
 extern crate libpulse_binding as pulse;
 extern crate libpulse_simple_binding as psimple;
-mod util;
 
 use std::io;
 
 use psimple::Simple;
 use pulse::stream::Direction;
 use pulse::error::PAErr;
-use std::io::stdout;
-use termion::event::Key;
-use termion::input::MouseTerminal;
+use std::io::{stdout, stdin, Read, Write};
+use termion::event::{Event, Key};
+use termion::input::{MouseTerminal, TermRead};
 use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
-use tui::backend::TermionBackend;
-use tui::Terminal;
-use tui::layout::{Layout, Constraint};
-use tui::widgets::{BarChart, Block, Borders, Widget, Gauge};
-use tui::style::{Style, Color};
-
-use crate::util::event::{Event, Events};
+use termion::async_stdin;
 
 const APP_NAME: &str = "sparkles";
-const CHUNK_SIZE: usize = 128;
-
-struct App {
-    data: u16
-}
-
-impl App {
-    fn new() -> App {
-        App {
-            data: 0
-        }
-    }
-
-    fn update(&mut self, value: u16) {
-        if (value > 100) {
-            self.data = 100;
-        } else {
-            self.data = value;
-        }
-    }
-}
+const DEFAULT_SAMPLE_RATE: u16 = 48000;
+const DEFAULT_FPS: u16 = 60;
 
 fn main() {
     // Connect to PulseAudio server
@@ -66,19 +40,13 @@ fn main() {
     // Initialize UI
     let stdout = io::stdout().into_raw_mode().unwrap();
     let stdout = MouseTerminal::from(stdout);
-    let stdout = AlternateScreen::from(stdout);
-    let backend = TermionBackend::new(stdout);
-    let mut terminal = Terminal::new(backend).unwrap();
-    terminal.hide_cursor();
+    let mut stdout = AlternateScreen::from(stdout);
 
-    let mut app = App::new();
-
-    // Setup event handlers
-    let events = Events::new();
+    let mut stdin = async_stdin().bytes();
 
     // Start streaming the audio buffer and updating UI
     let mut average_volume;
-    let buffer = &mut [0u8; CHUNK_SIZE];
+    let buffer = &mut [0u8; (DEFAULT_SAMPLE_RATE / DEFAULT_FPS) as usize];
     let mut should_exit = false;
 
     while !should_exit {
@@ -90,29 +58,18 @@ fn main() {
 
         average_volume = compute_average_volume(buffer);
 
-        terminal.draw(|mut f| {
-            let chunks = Layout::default()
-                .direction(tui::layout::Direction::Vertical)
-                .margin(2)
-                .constraints([Constraint::Percentage(100)].as_ref())
-                .split(f.size());
-            Gauge::default()
-                .block(Block::default().title(APP_NAME).borders(Borders::ALL))
-                .style(Style::default().fg(Color::Yellow))
-                .percent(app.data)
-                .render(&mut f, chunks[0]);
+        write!(stdout, "{}\r\n", average_volume);
+        stdout.flush();
 
-            match events.next().unwrap() {
-                Event::Input(input) => {
-                    if input == Key::Char('q') {
-                        should_exit = true;
-                    }
-                }
-                Event::Tick => {
-                    app.update(average_volume as u16)
-                }
+        while let b = stdin.next() {
+            if b.is_none() {
+                break;
             }
-        });
+
+            if let Some(Ok(b'q')) = b {
+                should_exit = true;
+            }
+        }
     }
 }
 
