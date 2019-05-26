@@ -6,9 +6,8 @@ use std::io;
 use psimple::Simple;
 use pulse::stream::Direction;
 use pulse::error::PAErr;
-use std::io::{stdout, stdin, Read, Write};
-use termion::event::{Event, Key};
-use termion::input::{MouseTerminal, TermRead};
+use std::io::{Read, Write};
+use termion::input::MouseTerminal;
 use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
 use termion::async_stdin;
@@ -58,10 +57,11 @@ fn main() {
 
         average_volume = compute_average_volume(buffer);
 
-        write!(stdout, "{}\r\n", average_volume);
-        stdout.flush();
+        write!(stdout, "{}\r\n", average_volume).unwrap();
+        stdout.flush().unwrap();
 
-        while let b = stdin.next() {
+        loop {
+            let b = stdin.next();
             if b.is_none() {
                 break;
             }
