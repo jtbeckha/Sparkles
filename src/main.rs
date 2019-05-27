@@ -1,16 +1,16 @@
+mod tty;
+
 extern crate libpulse_binding as pulse;
 extern crate libpulse_simple_binding as psimple;
-
-use std::io;
 
 use psimple::Simple;
 use pulse::stream::Direction;
 use pulse::error::PAErr;
 use std::io::{Read, Write};
-use termion::input::MouseTerminal;
-use termion::raw::IntoRawMode;
-use termion::screen::AlternateScreen;
-use termion::async_stdin;
+use termion::{async_stdin, terminal_size};
+
+use tty::Tty;
+use tty::Meter;
 
 const APP_NAME: &str = "sparkles";
 const DEFAULT_SAMPLE_RATE: u16 = 48000;
@@ -37,10 +37,7 @@ fn main() {
     ).unwrap();
 
     // Initialize UI
-    let stdout = io::stdout().into_raw_mode().unwrap();
-    let stdout = MouseTerminal::from(stdout);
-    let mut stdout = AlternateScreen::from(stdout);
-
+    let mut writer = Tty::init();
     let mut stdin = async_stdin().bytes();
 
     // Start streaming the audio buffer and updating UI
@@ -57,8 +54,17 @@ fn main() {
 
         average_volume = compute_average_volume(buffer);
 
-        write!(stdout, "{}\r\n", average_volume).unwrap();
-        stdout.flush().unwrap();
+        writer.clear();
+        let terminal_size = terminal_size().unwrap();
+
+        let meter: Meter = Meter {
+            x: terminal_size.0 / 2,
+            y: terminal_size.1,
+            width: 10,
+            height: 10,
+        };
+        writer.draw(meter);
+        writer.stdout.flush().unwrap();
 
         loop {
             let b = stdin.next();
