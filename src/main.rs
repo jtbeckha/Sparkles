@@ -71,14 +71,12 @@ fn main() {
         }
 
         amp = compute_rms_amplitude(buffer);
-        warn!("Got avg volume={}", amp);
         let decibel: f32;
         if amp == 0f32 {
             decibel = MIN_DECIBEL_LEVEL;
         } else {
             decibel = 20f32 * amp.log10();
         }
-        warn!("Got dB={}", decibel);
 
         let (terminal_size_x, terminal_size_y) = terminal_size().unwrap();
 
@@ -87,8 +85,6 @@ fn main() {
         if meter_height < 0f32 {
             meter_height = 0f32;
         }
-        warn!("Got meter_height f32={}", meter_height);
-        warn!("Got meter_height u16={}", meter_height as u16);
         let meter: Meter = Meter {
             x: terminal_size_x / 2,
             y: terminal_size_y,
