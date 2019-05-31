@@ -26,6 +26,7 @@ impl Tty<AlternateScreen<HideCursor<MouseTerminal<RawTerminal<Stdout>>>>> {
     pub fn clear(&mut self) {
         write!(self.stdout, "{}", termion::clear::All).unwrap();
         write!(self.stdout, "{}", termion::cursor::Goto(1, 1)).unwrap();
+        write!(self.stdout, "{}", termion::cursor::Hide).unwrap();
         self.stdout.flush().unwrap();
     }
 
