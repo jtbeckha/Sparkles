@@ -19,8 +19,6 @@ pub fn build() -> Box<Stream> {
         channels: 1,
         rate: 48000
     };
-
-
     assert!(spec.is_valid());
 
     let stream = Simple::new(

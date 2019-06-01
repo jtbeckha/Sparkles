@@ -1,4 +1,6 @@
+mod analyze;
 mod audio_stream;
+mod decode;
 mod tty;
 
 #[macro_use] extern crate log;
@@ -10,7 +12,9 @@ use std::fs::File;
 use std::io::{Read, Write};
 use termion::{async_stdin, terminal_size};
 
+use crate::analyze::rms_amplitude;
 use crate::audio_stream::Type;
+use crate::decode::decode;
 use crate::tty::Tty;
 use crate::tty::Meter;
 
@@ -39,7 +43,6 @@ fn main() {
     let mut stdin = async_stdin().bytes();
     writer.clear();
 
-    // Start streaming the audio buffer and updating UI
     let mut amp;
     let buffer = &mut [0u8; (DEFAULT_SAMPLE_RATE / DEFAULT_FPS) as usize];
     let mut should_exit = false;
@@ -52,11 +55,15 @@ fn main() {
         height: 0,
     };
 
+    // Start streaming the audio buffer and visualizing it
     while !should_exit {
         // Read from audio buffer.
         stream.stream(buffer);
 
-        amp = compute_rms_amplitude(buffer);
+        let mut samples = decode::decode(buffer);
+
+        amp = analyze::rms_amplitude(&mut samples);
+
         let decibel: f32;
         if amp <= 0f32 {
             decibel = MIN_DECIBEL_LEVEL;
@@ -85,27 +92,4 @@ fn main() {
     }
 
     writer.stdout.flush().ok();
-}
-
-fn compute_rms_amplitude(buffer: &mut [u8]) -> f32 {
-    let decoded = decode(buffer);
-
-    let mut square_sum = 0f32;
-    for (_, elem) in decoded.iter().enumerate() {
-        square_sum = square_sum + elem.powf(2f32);
-    }
-
-    let rms = (square_sum / decoded.len() as f32).sqrt();
-    return rms
-}
-
-/// Decode audio stream data to an f32 vector.
-pub fn decode(input: &[u8]) -> Vec<f32> {
-    let mut output = Vec::with_capacity(input.len() / 4);
-    for chunk in input.chunks_exact(4) {
-        assert_eq!(4, chunk.len());
-        let sample = NativeEndian::read_f32(&chunk);
-        output.push(sample);
-    }
-    return output;
 }

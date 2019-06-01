@@ -66,6 +66,9 @@ impl Meter {
     /// only draw or clear what it needs to display the new height. i.e. it doesn't redraw the
     /// entire Meter every time. This allows us to update the display without clearing the screen
     /// first which causes an annoying flicker effect.
+    //TODO would scrolling down allow us to redraw everything on every frame without the flicker effect?
+    //Ideally we could use the draw method above and pass in an array of Meters/some generic Drawable type
+    //and just let it draw those. That would also make it much to do fancy color stuff (shifting gradients, etc).
     pub fn update_and_draw(&mut self, new_height: u16, tty: &mut Tty<AlternateScreen<HideCursor<MouseTerminal<RawTerminal<Stdout>>>>>) {
         //TODO cache these
         let draw_row = std::iter::repeat(FULL_BLOCK_CHARACTER).take(self.width as usize).collect::<String>();
