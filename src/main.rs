@@ -1,64 +1,83 @@
-extern crate libpulse_binding as pulse;
-extern crate libpulse_simple_binding as psimple;
+mod analyze;
+mod audio_stream;
+mod decode;
+mod tty;
 
-use std::io;
+#[macro_use] extern crate log;
+extern crate simplelog;
 
-use psimple::Simple;
-use pulse::stream::Direction;
-use pulse::error::PAErr;
+use byteorder::{ByteOrder, NativeEndian};
+use simplelog::{CombinedLogger, LevelFilter, Config, WriteLogger};
+use std::fs::File;
 use std::io::{Read, Write};
-use termion::input::MouseTerminal;
-use termion::raw::IntoRawMode;
-use termion::screen::AlternateScreen;
-use termion::async_stdin;
+use termion::{async_stdin, terminal_size};
 
-const APP_NAME: &str = "sparkles";
+use crate::analyze::rms_amplitude;
+use crate::audio_stream::Type;
+use crate::decode::decode;
+use crate::tty::Tty;
+use crate::tty::Meter;
+
 const DEFAULT_SAMPLE_RATE: u16 = 48000;
-const DEFAULT_FPS: u16 = 60;
+const DEFAULT_FPS: u16 = 20;
+// Log10(0) is -inf (or undefined) so set a reasonable min decibel level
+const MIN_DECIBEL_LEVEL: f32 = -30f32;
+const MIN_DECIBEL_MAGNITUDE: f32 = 30f32;
 
 fn main() {
-    // Connect to PulseAudio server
-    let spec = pulse::sample::Spec {
-        format: pulse::sample::SAMPLE_FLOAT32,
-        channels: 1,
-        rate: 48000
-    };
-    assert!(spec.is_valid());
-
-    let stream = Simple::new(
-        None,               // Use default server
-        APP_NAME,
-        Direction::Record,
-        None,                // Use default device
-        "visualizer",
-        &spec,
-        None,               // Use default channel map
-        None                // Use default buffering attributes
+    // Initialize logging
+    CombinedLogger::init(
+        vec![
+            WriteLogger::new(LevelFilter::Info, Config::default(), File::create("sparkles.log").unwrap()),
+        ]
     ).unwrap();
 
+    // Establish audio stream
+    let mut stream = match audio_stream::build_audio_stream(Type::PulseSimple) {
+        Some(stream) => stream,
+        None => panic!("Unable to build audio_stream")
+    };
+
     // Initialize UI
-    let stdout = io::stdout().into_raw_mode().unwrap();
-    let stdout = MouseTerminal::from(stdout);
-    let mut stdout = AlternateScreen::from(stdout);
-
+    let mut writer = Tty::init();
     let mut stdin = async_stdin().bytes();
+    writer.clear();
 
-    // Start streaming the audio buffer and updating UI
-    let mut average_volume;
+    let mut amp;
     let buffer = &mut [0u8; (DEFAULT_SAMPLE_RATE / DEFAULT_FPS) as usize];
     let mut should_exit = false;
 
+    let (terminal_size_x, terminal_size_y) = terminal_size().unwrap();
+    let mut meter: Meter = Meter {
+        x: terminal_size_x / 2,
+        y: terminal_size_y,
+        width: 10,
+        height: 0,
+    };
+
+    // Start streaming the audio buffer and visualizing it
     while !should_exit {
-        // Read from PA buffer.
-        if let Err(PAErr(err)) = stream.read(buffer) {
-            dbg!(err);
-            break;
+        // Read from audio buffer.
+        stream.stream(buffer);
+
+        let mut samples = decode::decode(buffer);
+
+        amp = analyze::rms_amplitude(&mut samples);
+
+        let decibel: f32;
+        if amp <= 0f32 {
+            decibel = MIN_DECIBEL_LEVEL;
+        } else {
+            decibel = 20f32 * amp.log10();
         }
 
-        average_volume = compute_average_volume(buffer);
-
-        write!(stdout, "{}\r\n", average_volume).unwrap();
-        stdout.flush().unwrap();
+        let mut meter_height = ((decibel + MIN_DECIBEL_MAGNITUDE) / MIN_DECIBEL_MAGNITUDE) * terminal_size_y as f32;
+        // fp precision errors (?) can lead this to be negative, leading to an overflow when converting to u16 below
+        if meter_height < 0f32 {
+            meter_height = 0f32;
+        }
+        meter.update_and_draw(meter_height as u16, &mut writer);
+        writer.stdout.flush().unwrap();
 
         loop {
             let b = stdin.next();
@@ -71,13 +90,6 @@ fn main() {
             }
         }
     }
-}
 
-fn compute_average_volume(buffer: &mut [u8]) -> i32 {
-    let mut sum = 0;
-    for (_, elem) in buffer.iter().enumerate() {
-        sum += *elem as i32;
-    }
-
-    return sum / buffer.len() as i32;
+    writer.stdout.flush().ok();
 }
