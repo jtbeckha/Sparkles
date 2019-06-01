@@ -7,6 +7,7 @@ use termion::screen::AlternateScreen;
 use termion::cursor::HideCursor;
 
 const FULL_BLOCK_CHARACTER: char = '\u{2588}';
+const WHITESPACE_CHARACTER: char = ' ';
 
 pub struct Tty<W: Write> {
     /// The output target.
@@ -57,5 +58,38 @@ pub struct Meter {
     /// Horizontal size of the meter
     pub width: u16,
     /// Vertical size of the meter
-    pub height: u16
+    pub height: u16,
+}
+
+impl Meter {
+    /// Updates parameters of the meter and redraws it to the tty. This tries to be efficient and
+    /// only draw or clear what it needs to display the new height. i.e. it doesn't redraw the
+    /// entire Meter every time. This allows us to update the display without clearing the screen
+    /// first which causes an annoying flicker effect.
+    pub fn update_and_draw(&mut self, new_height: u16, tty: &mut Tty<AlternateScreen<HideCursor<MouseTerminal<RawTerminal<Stdout>>>>>) {
+        //TODO cache these
+        let draw_row = std::iter::repeat(FULL_BLOCK_CHARACTER).take(self.width as usize).collect::<String>();
+        let clear_row = std::iter::repeat(WHITESPACE_CHARACTER).take(self.width as usize).collect::<String>();
+
+        let y_start: u16;
+        if new_height > self.height {
+            // Add rows to extend the meter to new_height
+            y_start = self.y - new_height;
+            let height_diff = new_height - self.height;
+            for y in y_start..(y_start + height_diff) {
+                write!(tty.stdout, "{}", termion::cursor::Goto(self.x, y)).unwrap();
+                write!(tty.stdout, "{}", draw_row).unwrap();
+            }
+        } else if new_height < self.height {
+            // Clear rows to shorten the meter to new_height
+            y_start = self.y - self.height;
+            let height_diff = self.height - new_height;
+            for y in y_start..(y_start + height_diff) {
+                write!(tty.stdout, "{}", termion::cursor::Goto(self.x, y)).unwrap();
+                write!(tty.stdout, "{}", clear_row).unwrap();
+            }
+        }
+
+        self.height = new_height;
+    }
 }
