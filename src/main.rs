@@ -1,27 +1,19 @@
+mod audio_stream;
 mod tty;
 
 #[macro_use] extern crate log;
 extern crate simplelog;
-extern crate libpulse_binding as pulse;
-extern crate libpulse_simple_binding as psimple;
 
 use byteorder::{ByteOrder, NativeEndian};
-use psimple::Simple;
-use pulse::stream::Direction;
-use pulse::error::PAErr;
+use simplelog::{CombinedLogger, LevelFilter, Config, WriteLogger};
+use std::fs::File;
 use std::io::{Read, Write};
 use termion::{async_stdin, terminal_size};
 
-use tty::Tty;
-use tty::Meter;
-use std::collections::VecDeque;
+use crate::audio_stream::Type;
+use crate::tty::Tty;
+use crate::tty::Meter;
 
-use simplelog::*;
-
-use std::fs::File;
-use pulse::sample::SAMPLE_FLOAT32;
-
-const APP_NAME: &str = "sparkles";
 const DEFAULT_SAMPLE_RATE: u16 = 48000;
 const DEFAULT_FPS: u16 = 20;
 // Log10(0) is -inf (or undefined) so set a reasonable min decibel level
@@ -29,30 +21,18 @@ const MIN_DECIBEL_LEVEL: f32 = -30f32;
 const MIN_DECIBEL_MAGNITUDE: f32 = 30f32;
 
 fn main() {
+    // Initialize logging
     CombinedLogger::init(
         vec![
             WriteLogger::new(LevelFilter::Info, Config::default(), File::create("sparkles.log").unwrap()),
         ]
     ).unwrap();
 
-    // Connect to PulseAudio server
-    let spec = pulse::sample::Spec {
-        format: SAMPLE_FLOAT32,
-        channels: 1,
-        rate: 48000
+    // Establish audio stream
+    let mut stream = match audio_stream::build_audio_stream(Type::PulseSimple) {
+        Some(stream) => stream,
+        None => panic!("Unable to build audio_stream")
     };
-    assert!(spec.is_valid());
-
-    let stream = Simple::new(
-        None,               // Use default server
-        APP_NAME,
-        Direction::Record,
-        None,                // Use default device
-        "visualizer",
-        &spec,
-        None,               // Use default channel map
-        None                // Use default buffering attributes
-    ).unwrap();
 
     // Initialize UI
     let mut writer = Tty::init();
@@ -73,11 +53,8 @@ fn main() {
     };
 
     while !should_exit {
-        // Read from PA buffer.
-        if let Err(PAErr(err)) = stream.read(buffer) {
-            dbg!(err);
-            break;
-        }
+        // Read from audio buffer.
+        stream.stream(buffer);
 
         amp = compute_rms_amplitude(buffer);
         let decibel: f32;
