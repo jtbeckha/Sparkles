@@ -3,6 +3,7 @@ use byteorder::{ByteOrder, NativeEndian};
 const BYTES_PER_SAMPLE: usize = 4;
 
 /// A frame of stereo audio data containing an f32 PCM sample for the left and right channel.
+#[derive(PartialEq, Debug)]
 pub struct Frame {
     pub left: f32,
     pub right: f32
@@ -41,4 +42,23 @@ pub fn decode_stereo(input: &[u8]) -> Vec<Frame> {
         });
     }
     return output;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_decode_stereo() {
+        let input: [u8; 16] = [0x80, 0x80, 0x80, 0x80, 0x40, 0x40, 0x40, 0x40, 0x20, 0x20, 0x20, 0x20, 0x10, 0x10, 0x10, 0x10];
+
+        let expected: Vec<Frame> = vec![
+            Frame { left: -1.180104E-38, right: 3.0039215 },
+            Frame { left: 1.3563156E-19, right: 2.8411367E-29 }
+        ];
+
+        let actual = decode_stereo(&input);
+
+        assert_eq!(expected, actual);
+    }
 }

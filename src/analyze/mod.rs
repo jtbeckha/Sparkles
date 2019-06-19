@@ -29,3 +29,23 @@ pub fn rms_amplitude_stereo(samples: &mut Vec<Frame>) -> (f32, f32) {
 
     return (left_rms, right_rms);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rms_amplitude_stereo() {
+        let mut samples: Vec<Frame> = vec![
+            Frame { left: 2.0, right: 4.0 },
+            Frame { left: 4.0, right: 8.0 }
+        ];
+
+        let (left_rms, right_rms) = rms_amplitude_stereo(&mut samples);
+
+        // sqrt((2^2 + 4^2) / 2)
+        assert_eq!((10.0 as f32).sqrt(), left_rms);
+        // sqrt((4^2 + 8^2) / 2)
+        assert_eq!((40.0 as f32).sqrt(), right_rms);
+    }
+}
