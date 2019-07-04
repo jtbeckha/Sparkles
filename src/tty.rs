@@ -8,6 +8,8 @@ use termion::cursor::HideCursor;
 
 const FULL_BLOCK_CHARACTER: char = '\u{2588}';
 const WHITESPACE_CHARACTER: char = ' ';
+// ANSI escape string for blue FG color
+const ANSI_BLUE_FG_TEMPLATE: &str = "\x1b[38;5;12m{}\x1b[0m";
 
 pub struct Tty<W: Write> {
     /// The output target.
@@ -72,6 +74,7 @@ impl Meter {
     pub fn update_and_draw(&mut self, new_height: u16, tty: &mut Tty<AlternateScreen<HideCursor<MouseTerminal<RawTerminal<Stdout>>>>>) {
         //TODO cache these
         let draw_row = std::iter::repeat(FULL_BLOCK_CHARACTER).take(self.width as usize).collect::<String>();
+        let colored_draw_row = ANSI_BLUE_FG_TEMPLATE.replace("{}", &draw_row);
         let clear_row = std::iter::repeat(WHITESPACE_CHARACTER).take(self.width as usize).collect::<String>();
 
         let y_start: u16;
@@ -81,7 +84,7 @@ impl Meter {
             let height_diff = new_height - self.height;
             for y in y_start..(y_start + height_diff) {
                 write!(tty.stdout, "{}", termion::cursor::Goto(self.x, y)).unwrap();
-                write!(tty.stdout, "{}", draw_row).unwrap();
+                write!(tty.stdout, "{}", colored_draw_row).unwrap();
             }
         } else if new_height < self.height {
             // Clear rows to shorten the meter to new_height

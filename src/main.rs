@@ -14,7 +14,7 @@ use termion::{async_stdin, terminal_size};
 
 use crate::analyze::rms_amplitude;
 use crate::audio_stream::Type;
-use crate::decode::decode;
+use crate::decode::{decode, decode_stereo};
 use crate::tty::Tty;
 use crate::tty::Meter;
 
@@ -43,40 +43,72 @@ fn main() {
     let mut stdin = async_stdin().bytes();
     writer.clear();
 
-    let mut amp;
     let buffer = &mut [0u8; (DEFAULT_SAMPLE_RATE / DEFAULT_FPS) as usize];
     let mut should_exit = false;
 
     let (terminal_size_x, terminal_size_y) = terminal_size().unwrap();
-    let mut meter: Meter = Meter {
-        x: terminal_size_x / 2,
+    let meter_width: u16 = 10;
+    // Spacing between the two meters
+    let meter_spacing: u16 = 5;
+    // X-coordinate of the center of the terminal
+    let terminal_center_x = terminal_size_x / 2;
+
+    let mut l_meter: Meter = Meter {
+        // x-coordinate is the leftmost position of the meter. We want the rightmost position of
+        // this meter to be shifted to the left by meter_spacing / 2 from the center of the terminal.
+        x: terminal_center_x - (meter_width + (meter_spacing / 2)),
         y: terminal_size_y,
-        width: 10,
+        width: meter_width,
         height: 0,
     };
+    let mut r_meter: Meter = Meter {
+        // x-coordinate is the leftmost position of the meter. We want the leftmost position of
+        // this meter to be shifted to the right by meter_spacing / 2 from the center of the terminal.
+        x: terminal_center_x + (meter_spacing / 2),
+        y: terminal_size_y,
+        width: meter_width,
+        height: 0,
+    };
+
+
 
     // Start streaming the audio buffer and visualizing it
     while !should_exit {
         // Read from audio buffer.
         stream.stream(buffer);
 
-        let mut samples = decode::decode(buffer);
+        let mut samples = decode_stereo(buffer);
 
-        amp = analyze::rms_amplitude(&mut samples);
+        // FIXME is it ok to declare new floats every time?
+        let (l_amp, r_amp) = analyze::rms_amplitude_stereo(&mut samples);
 
-        let decibel: f32;
-        if amp <= 0f32 {
-            decibel = MIN_DECIBEL_LEVEL;
+        let l_decibel: f32;
+        if l_amp <= 0f32 {
+            l_decibel = MIN_DECIBEL_LEVEL;
         } else {
-            decibel = 20f32 * amp.log10();
+            l_decibel = 20f32 * l_amp.log10();
         }
 
-        let mut meter_height = ((decibel + MIN_DECIBEL_MAGNITUDE) / MIN_DECIBEL_MAGNITUDE) * terminal_size_y as f32;
-        // fp precision errors (?) can lead this to be negative, leading to an overflow when converting to u16 below
-        if meter_height < 0f32 {
-            meter_height = 0f32;
+        let r_decibel: f32;
+        if r_amp <= 0f32 {
+            r_decibel = MIN_DECIBEL_LEVEL;
+        } else {
+            r_decibel = 20f32 * r_amp.log10();
         }
-        meter.update_and_draw(meter_height as u16, &mut writer);
+
+        let mut l_meter_height = ((l_decibel + MIN_DECIBEL_MAGNITUDE) / MIN_DECIBEL_MAGNITUDE) * terminal_size_y as f32;
+        // fp precision errors (?) can lead this to be negative, leading to an overflow when converting to u16 below
+        if l_meter_height < 0f32 {
+            l_meter_height = 0f32;
+        }
+        let mut r_meter_height = ((r_decibel + MIN_DECIBEL_MAGNITUDE) / MIN_DECIBEL_MAGNITUDE) * terminal_size_y as f32;
+        // fp precision errors (?) can lead this to be negative, leading to an overflow when converting to u16 below
+        if r_meter_height < 0f32 {
+            r_meter_height = 0f32;
+        }
+
+        l_meter.update_and_draw(l_meter_height as u16, &mut writer);
+        r_meter.update_and_draw(r_meter_height as u16, &mut writer);
         writer.stdout.flush().unwrap();
 
         loop {

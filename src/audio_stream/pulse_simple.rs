@@ -16,7 +16,7 @@ pub fn build() -> Box<Stream> {
     // Connect to PulseAudio server
     let spec = Spec {
         format: SAMPLE_FLOAT32,
-        channels: 1,
+        channels: 2,
         rate: 48000
     };
     assert!(spec.is_valid());
