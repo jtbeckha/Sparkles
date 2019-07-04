@@ -11,11 +11,10 @@ cargo run
 Stereo dB Meter
 
 Planned:
-Spectrum graph
-Some color options
+* Spectrum graph
+* Some color options
 
 If you have ideas for other visualizations feel free to open an issue! Be aware that some modularization/refactoring work still needs to be done to create a framework that makes it easy to add additional visualizations.
 
 ## Audio Backend Compatibility
 Sparkles is currently compatible with PulseAudio
-
